@@ -151,10 +151,8 @@ export function computePassportCrop(detection, imgWidth, imgHeight) {
  * Crop an image from a data URL and produce the passport-sized output.
  * Uses HTML5 Canvas for pixel-level cropping with high-quality downscaling.
  *
- * Memory management: Uses canvas.toBlob() instead of toDataURL() to avoid
- * creating large intermediate strings. The temporary canvas and Image element
- * are explicitly cleaned up after use to prevent memory accumulation during
- * bulk processing.
+ * Memory management: The temporary canvas pixel buffer is explicitly released
+ * after the JPEG export to prevent memory accumulation during bulk processing.
  *
  * @param {string} dataUrl - Source image as data URL
  * @param {Object} cropRect - { sx, sy, sw, sh, outW, outH }
@@ -177,38 +175,16 @@ export function applyCrop(dataUrl, cropRect) {
       // Draw the cropped region from source, scaled to passport dimensions
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
 
-      // Release the source Image element — no longer needed
-      img.src = '';
+      // Export as high-quality JPEG (0.95 quality ≈ 300 DPI equivalent)
+      const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
-      // Export as high-quality JPEG using toBlob for memory efficiency.
-      // toBlob creates a Blob directly (binary) instead of a base64 string,
-      // which uses ~33% less memory than toDataURL for the same image.
-      canvas.toBlob(
-        (blob) => {
-          // Release canvas pixel buffer immediately
-          canvas.width = 0;
-          canvas.height = 0;
+      // Release canvas pixel buffer immediately after export
+      canvas.width = 0;
+      canvas.height = 0;
 
-          if (!blob) {
-            reject(new Error('Canvas toBlob failed'));
-            return;
-          }
-
-          // Convert blob to data URL for compatibility with IPC save method
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error('FileReader failed'));
-          reader.readAsDataURL(blob);
-        },
-        'image/jpeg',
-        0.95
-      );
+      resolve(jpegDataUrl);
     };
-    img.onerror = (err) => {
-      // Clean up image on error too
-      img.src = '';
-      reject(err);
-    };
+    img.onerror = (err) => reject(err);
     img.src = dataUrl;
   });
 }

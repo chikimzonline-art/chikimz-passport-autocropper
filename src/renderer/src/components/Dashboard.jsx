@@ -293,7 +293,7 @@ export default function Dashboard() {
         img.src = '';
 
         // Step 5: Apply the crop (produces passport-sized JPEG)
-        const croppedDataUrl = await applyCrop(imageDataUrl, cropRect);
+        let croppedDataUrl = await applyCrop(imageDataUrl, cropRect);
 
         // Step 6: Save to output folder
         const saveResult = await window.electronAPI.saveCroppedImage(

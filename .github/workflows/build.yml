@@ -1,0 +1,33 @@
+name: Build and Release Auto-Passport Crop
+
+# This tells GitHub to wake up ONLY when you push a tag that starts with 'v' (like v1.0.0)
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest # Boot up a Windows machine to make the .exe
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v3
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 25 # You can change this if you use a different Node version
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Vite Renderer
+        run: npm run build
+
+      - name: Build and Publish Electron App
+        uses: samuelmeuli/action-electron-builder@v1
+        with:
+          # This gives the action permission to upload the .exe to your Release page
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release: true

@@ -1,8 +1,7 @@
 import React from 'react';
 
 const sectionStyle = {
-  flex: 1,
-  overflow: 'hidden',
+  flexShrink: 0,
   display: 'flex',
   flexDirection: 'column',
 };
@@ -21,7 +20,6 @@ const gridStyle = {
   gap: 12,
   overflowX: 'auto',
   paddingBottom: 4,
-  flex: 1,
 };
 
 const cardStyle = {

@@ -4,6 +4,7 @@ import FolderSelector from './FolderSelector';
 import DropZone from './DropZone';
 import ProgressBar from './ProgressBar';
 import PreviewGrid from './PreviewGrid';
+import StatusBar from './StatusBar';
 import { initializeFaceDetector, detectFaces, shutdownFaceDetector, isMockMode } from '../utils/faceDetector';
 import { isElectron } from '../utils/electronMock';
 import { computePassportCrop, applyCrop } from '../utils/cropPassport';
@@ -12,7 +13,7 @@ const dashboardStyle = {
   flex: 1,
   display: 'flex',
   flexDirection: 'column',
-  overflowY: 'auto',
+  overflow: 'hidden',
   padding: '20px 24px',
   gap: 16,
 };
@@ -467,6 +468,9 @@ export default function Dashboard() {
           {state.error}
         </div>
       )}
+
+      {/* Status bar */}
+      <StatusBar status={state.status} />
     </div>
   );
 }

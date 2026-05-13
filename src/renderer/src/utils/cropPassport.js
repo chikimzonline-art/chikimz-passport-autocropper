@@ -148,6 +148,59 @@ export function computePassportCrop(detection, imgWidth, imgHeight) {
 }
 
 /**
+ * Straighten a tilted image by rotating it to make the eye line horizontal.
+ *
+ * When a scanned or photographed passport image is tilted, the eyes are not
+ * level. This function rotates the entire image by the negative of the tilt
+ * angle so that the face is upright. The canvas is enlarged to fit the
+ * rotated image without cropping any content.
+ *
+ * Memory management: The temporary canvas pixel buffer is explicitly released
+ * after the JPEG export to prevent memory accumulation during bulk processing.
+ *
+ * @param {HTMLImageElement} img - Source image element (may be tilted)
+ * @param {number} tiltAngle - Tilt angle in degrees (positive = head tilted right)
+ * @returns {string} - Straightened image as JPEG data URL (0.95 quality)
+ */
+export function straightenImage(img, tiltAngle) {
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+
+  // Convert angle to radians (rotate in the OPPOSITE direction to correct tilt)
+  const radians = (-tiltAngle * Math.PI) / 180;
+
+  // Calculate the bounding box of the rotated image to avoid cropping
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  const newW = Math.ceil(w * cos + h * sin);
+  const newH = Math.ceil(w * sin + h * cos);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = newW;
+  canvas.height = newH;
+
+  const ctx = canvas.getContext('2d');
+
+  // Fill with white background (passport standard) so rotated corners aren't black
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, newW, newH);
+
+  // Rotate around center of the new canvas
+  ctx.translate(newW / 2, newH / 2);
+  ctx.rotate(radians);
+  ctx.drawImage(img, -w / 2, -h / 2);
+
+  // Export as JPEG
+  const outputDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+  // Release canvas pixel buffer
+  canvas.width = 0;
+  canvas.height = 0;
+
+  return outputDataUrl;
+}
+
+/**
  * Crop an image from a data URL and produce the passport-sized output.
  * Uses HTML5 Canvas for pixel-level cropping with high-quality downscaling.
  *

@@ -5,9 +5,8 @@ import DropZone from './DropZone';
 import ProgressBar from './ProgressBar';
 import PreviewGrid from './PreviewGrid';
 import { initializeFaceDetector, detectFaces, shutdownFaceDetector, isMockMode } from '../utils/faceDetector';
-import { initializeBackgroundRemover, removeBackground, shutdownBackgroundRemover, isBgRemoverReady } from '../utils/backgroundRemover';
 import { isElectron } from '../utils/electronMock';
-import { computePassportCrop, applyCrop, straightenImage } from '../utils/cropPassport';
+import { computePassportCrop, applyCrop } from '../utils/cropPassport';
 
 const dashboardStyle = {
   flex: 1,
@@ -126,83 +125,6 @@ const separatorLineStyle = {
   background: '#334155',
 };
 
-// ─── Background Removal Styles ───
-
-const bgRemovalCardStyle = {
-  background: '#1e293b',
-  border: '1px solid #334155',
-  borderRadius: 10,
-  padding: '14px 16px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-};
-
-const bgRemovalHeaderStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-};
-
-const toggleTrackStyle = (active) => ({
-  width: 44,
-  height: 24,
-  borderRadius: 12,
-  background: active ? '#3b82f6' : '#475569',
-  cursor: 'pointer',
-  transition: 'background 0.2s ease',
-  position: 'relative',
-  flexShrink: 0,
-});
-
-const toggleThumbStyle = (active) => ({
-  width: 20,
-  height: 20,
-  borderRadius: '50%',
-  background: '#fff',
-  position: 'absolute',
-  top: 2,
-  left: active ? 22 : 2,
-  transition: 'left 0.2s ease',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-});
-
-const colorSwatchRowStyle = {
-  display: 'flex',
-  gap: 8,
-  alignItems: 'center',
-};
-
-const colorSwatchStyle = (active, color) => ({
-  width: 28,
-  height: 28,
-  borderRadius: 6,
-  background: color,
-  border: active ? '2px solid #3b82f6' : '2px solid #475569',
-  cursor: 'pointer',
-  transition: 'border-color 0.2s ease, transform 0.15s ease',
-  boxShadow: active ? '0 0 8px rgba(59,130,246,0.4)' : 'none',
-});
-
-const customColorInputStyle = {
-  width: 28,
-  height: 28,
-  borderRadius: 6,
-  border: '2px solid #475569',
-  cursor: 'pointer',
-  padding: 0,
-  background: 'transparent',
-};
-
-// Common passport background colors
-const PASSPORT_BG_COLORS = [
-  { color: '#ffffff', label: 'White' },
-  { color: '#e8e8e8', label: 'Light Gray' },
-  { color: '#d6e4f0', label: 'Light Blue' },
-  { color: '#f0f0f0', label: 'Off-White' },
-  { color: '#e0e0e0', label: 'Gray' },
-];
-
 /**
  * Utility: Yield back to the event loop so UI stays responsive.
  */
@@ -218,30 +140,6 @@ function loadImage(dataUrl) {
     img.onerror = reject;
     img.src = dataUrl;
   });
-}
-
-/**
- * Utility: Calculate head tilt angle from face detection keypoints.
- * Uses the left eye and right eye positions to determine rotation angle.
- * Returns angle in degrees (positive = head tilted right, negative = tilted left).
- */
-function getTiltAngle(detection) {
-  const keypoints = detection.keypoints;
-  if (!keypoints || keypoints.length < 2) return 0;
-
-  // MediaPipe face keypoints: [0]=right eye, [1]=left eye, [2]=nose, [3]=mouth, [4]=right ear, [5]=left ear
-  const rightEye = keypoints[0];
-  const leftEye = keypoints[1];
-
-  if (!rightEye || !leftEye) return 0;
-
-  const dx = leftEye.x - rightEye.x;
-  const dy = leftEye.y - rightEye.y;
-
-  if (Math.abs(dx) < 1) return 0; // Eyes nearly vertical — skip
-
-  // atan2 gives angle of the eye line from horizontal
-  return Math.atan2(dy, dx) * (180 / Math.PI);
 }
 
 export default function Dashboard() {
@@ -262,15 +160,12 @@ export default function Dashboard() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [mockMode, setMockMode] = useState(false);
   const [browserMode, setBrowserMode] = useState(false);
-  const [removeBg, setRemoveBg] = useState(false);
-  const [bgColor, setBgColor] = useState('#ffffff');
-  const [bgRemoverReady, setBgRemoverReady] = useState(false);
 
   useEffect(() => {
     setBrowserMode(!isElectron());
   }, []);
 
-  // ─── Initialize FaceDetector & BackgroundRemover on mount ───
+  // ─── Initialize FaceDetector on mount ───
   useEffect(() => {
     let mounted = true;
 
@@ -285,16 +180,6 @@ export default function Dashboard() {
         if (mounted) {
           setWorkerReady(true);
           setMockMode(isMockMode());
-        }
-
-        // Initialize background remover (non-blocking — failure just disables the feature)
-        try {
-          const bgOk = await initializeBackgroundRemover(resourcePath);
-          if (mounted && bgOk) {
-            setBgRemoverReady(true);
-          }
-        } catch (bgErr) {
-          console.warn('[Dashboard] Background remover init failed:', bgErr.message);
         }
       } catch (err) {
         if (mounted) {
@@ -312,7 +197,6 @@ export default function Dashboard() {
     return () => {
       mounted = false;
       shutdownFaceDetector();
-      shutdownBackgroundRemover();
     };
   }, []);
 
@@ -390,7 +274,7 @@ export default function Dashboard() {
         const img = await loadImage(imageDataUrl);
 
         // Step 3: Detect face(s)
-        let detections = detectFaces(img);
+        const detections = detectFaces(img);
 
         if (!detections || detections.length === 0) {
           // Release Image element memory when no face detected
@@ -400,58 +284,15 @@ export default function Dashboard() {
           continue;
         }
 
-        // Step 3b: Straighten image if face is tilted (using eye keypoints)
-        let straightenedDataUrl = imageDataUrl;
-        let straightenedImg = img;
+        // Step 4: Compute passport crop rectangle
         const bestDetection = detections[0];
-        const tiltAngle = getTiltAngle(bestDetection);
+        const cropRect = computePassportCrop(bestDetection, img.naturalWidth, img.naturalHeight);
 
-        if (Math.abs(tiltAngle) > 2) {
-          // Tilt > 2° — straighten the image
-          straightenedDataUrl = straightenImage(img, tiltAngle);
-          img.src = ''; // Release original image
+        // Release Image element — no longer needed after crop rect is computed
+        img.src = '';
 
-          // Re-detect face on the straightened image for accurate crop rectangle
-          straightenedImg = await loadImage(straightenedDataUrl);
-          detections = detectFaces(straightenedImg);
-
-          if (!detections || detections.length === 0) {
-            // If re-detection fails, fall back to original detection
-            // (adjust coordinates for the rotated image)
-            straightenedImg.src = '';
-            addResult({ name: file.name, status: 'error', error: 'Face lost after straightening' });
-            await yieldToUI();
-            continue;
-          }
-        }
-
-        // Step 4: Compute passport crop rectangle (on the straightened image)
-        const finalDetection = detections[0];
-        const cropRect = computePassportCrop(finalDetection, straightenedImg.naturalWidth, straightenedImg.naturalHeight);
-
-        // Release Image element — no longer needed after crop rect computed
-        straightenedImg.src = '';
-
-        // Step 5: Apply the crop first (produces passport-sized JPEG)
-        let croppedDataUrl = await applyCrop(straightenedDataUrl, cropRect);
-
-        // Release straightened data URL if different from original
-        if (straightenedDataUrl !== imageDataUrl) {
-          straightenedDataUrl = null;
-        }
-
-        // Step 5b: Remove background if enabled (after cropping — better segmentation on larger face)
-        if (removeBg && bgRemoverReady) {
-          try {
-            const croppedImg = await loadImage(croppedDataUrl);
-            const bgRemovedDataUrl = removeBackground(croppedImg, bgColor);
-            croppedImg.src = '';
-            croppedDataUrl = bgRemovedDataUrl;
-          } catch (bgErr) {
-            console.warn(`[Dashboard] BG removal failed for ${file.name}:`, bgErr.message);
-            // Continue with cropped image (no bg removal)
-          }
-        }
+        // Step 5: Apply the crop (produces passport-sized JPEG)
+        let croppedDataUrl = await applyCrop(imageDataUrl, cropRect);
 
         // Step 6: Save to output folder
         const saveResult = await window.electronAPI.saveCroppedImage(
@@ -490,7 +331,7 @@ export default function Dashboard() {
     if (!cancelledRef.current) {
       setStatus('done');
     }
-  }, [state, isDropMode, cancelledRef, setStatus, setProgress, setCurrentFile, addResult, addPreviewPair, removeBg, bgColor, bgRemoverReady, mockMode]);
+  }, [state, isDropMode, cancelledRef, setStatus, setProgress, setCurrentFile, addResult, addPreviewPair]);
 
   // ─── Can start processing? ───
   const hasImages = state.imageFiles.length > 0;
@@ -584,72 +425,6 @@ export default function Dashboard() {
           status={state.status}
         />
       )}
-
-      {/* Background Removal Options */}
-      <div style={bgRemovalCardStyle}>
-        <div style={bgRemovalHeaderStyle}>
-          <div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>Remove Background</span>
-            <span style={{ fontSize: 11, color: bgRemoverReady ? '#22c55e' : '#64748b', marginLeft: 8 }}>
-              {bgRemoverReady ? '● Ready' : (isInitializing ? '◐ Loading...' : '○ Unavailable')}
-            </span>
-          </div>
-          <div
-            style={toggleTrackStyle(removeBg)}
-            onClick={() => setRemoveBg(!removeBg)}
-            role="switch"
-            aria-checked={removeBg}
-          >
-            <div style={toggleThumbStyle(removeBg)} />
-          </div>
-        </div>
-
-        {removeBg && (
-          <div style={colorSwatchRowStyle}>
-            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              BG Color:
-            </span>
-            {PASSPORT_BG_COLORS.map(({ color, label }) => (
-              <div
-                key={color}
-                style={colorSwatchStyle(bgColor === color, color)}
-                onClick={() => setBgColor(color)}
-                title={label}
-              />
-            ))}
-            {/* Custom color picker */}
-            <div style={{ position: 'relative' }}>
-              <input
-                type="color"
-                value={bgColor}
-                onChange={(e) => setBgColor(e.target.value)}
-                style={{
-                  ...customColorInputStyle,
-                  opacity: 0,
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  cursor: 'pointer',
-                }}
-                title="Custom color"
-              />
-              <div style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: `conic-gradient(red, yellow, lime, aqua, blue, magenta, red)`,
-                border: !PASSPORT_BG_COLORS.find(c => c.color === bgColor) ? '2px solid #3b82f6' : '2px solid #475569',
-                pointerEvents: 'none',
-              }} />
-            </div>
-            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
-              {PASSPORT_BG_COLORS.find(c => c.color === bgColor)?.label || bgColor}
-            </span>
-          </div>
-        )}
-      </div>
 
       {/* Controls */}
       <div style={controlsRowStyle}>

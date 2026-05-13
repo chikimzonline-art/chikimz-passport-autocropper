@@ -41,7 +41,8 @@ export async function initializeFaceDetector(resourcePath = null) {
   if (isInitialized && faceDetector) return true;
 
   try {
-    const isDev = !resourcePath || resourcePath.includes('/public');
+    // const isDev = !resourcePath || resourcePath.includes('/public');
+    const isDev = !resourcePath || resourcePath.includes('/public') || resourcePath.includes('\\public');
 
     const wasmPath = isDev ? './wasm' : `file://${resourcePath}/wasm`;
     // Use full_range model — detects small/distant AND large/close faces

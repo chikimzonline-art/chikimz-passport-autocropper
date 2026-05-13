@@ -66,3 +66,9 @@ In development, Vite serves the `public/` directory at the root URL. In producti
 ## License
 
 ISC
+
+## Download & Installation of the desktop apps
+
+Refer our release page to download the latest .exe installable windows file. 
+
+Thank You

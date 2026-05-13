@@ -162,7 +162,9 @@ export function computePassportCrop(detection, imgWidth, imgHeight) {
  * @param {number} tiltAngle - Tilt angle in degrees (positive = head tilted right)
  * @returns {string} - Straightened image as JPEG data URL (0.95 quality)
  */
-export function straightenImage(img, tiltAngle) {
+
+
+export function straightenImage(img, tiltAngle, bgColor = '#ffffff')  {
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
 
@@ -182,7 +184,7 @@ export function straightenImage(img, tiltAngle) {
   const ctx = canvas.getContext('2d');
 
   // Fill with white background (passport standard) so rotated corners aren't black
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = bgColor;
   ctx.fillRect(0, 0, newW, newH);
 
   // Rotate around center of the new canvas

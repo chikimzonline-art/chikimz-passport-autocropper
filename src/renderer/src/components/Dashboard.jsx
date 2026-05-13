@@ -408,7 +408,7 @@ export default function Dashboard() {
 
         if (Math.abs(tiltAngle) > 2) {
           // Tilt > 2° — straighten the image
-          straightenedDataUrl = straightenImage(img, tiltAngle);
+          straightenedDataUrl = straightenImage(img, tiltAngle, bgColor);
           img.src = ''; // Release original image
 
           // Re-detect face on the straightened image for accurate crop rectangle
